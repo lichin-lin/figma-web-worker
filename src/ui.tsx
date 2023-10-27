@@ -5,6 +5,7 @@ import {
   Checkbox,
   Container,
   Divider,
+  Dropdown,
   Muted,
   render,
   Text,
@@ -31,8 +32,9 @@ function Plugin() {
 
   const [imageProcessingWebWorker, setImageProcessingWebWorker] =
     useState<any>();
+  const [filterOption, setFilterOption] = useState<string>("Warm");
 
-  // 💡 1. Since we cannot load external script but webworker needs a URL
+  // 💡 Since we cannot load external script but webworker needs a URL
   // convert the code than is meant to run in the webworker to
   // URL BLOB and pass it into the webworker:
   const loadWebWorker = (script: Function) => {
@@ -40,7 +42,7 @@ function Plugin() {
     return new Worker(URL.createObjectURL(new Blob([`(${scriptStr})()`])));
   };
 
-  // 2. load the workers into state
+  // 💡 load the workers into React state
   useEffect(() => {
     setFibWebWorker(loadWebWorker(fibWorkerScript));
     setImageProcessingWebWorker(loadWebWorker(imageProcessingWorkerScript));
@@ -72,7 +74,7 @@ function Plugin() {
       );
     };
 
-    // either calculate on background threads (web worker)
+    // 1-1. Either calculate on background threads (web worker)
     if (usefibWorker) {
       fibWebWorker.postMessage({ number: num });
     } else {
@@ -86,7 +88,7 @@ function Plugin() {
       emit<SubmitNumberHandler>("SUBMIT_NUM", `${fibNum}`);
     }
 
-    // after we finish the calculation on background threads,
+    // 1-2. After we finish the calculation on background threads,
     // return the result to main thread.
     fibWebWorker.onmessage = (e: any) => {
       const { timeTaken, fibNum } = e.data;
@@ -100,7 +102,7 @@ function Plugin() {
 
   // 💡 Example 2: Image processing
   const handleImageProcessing = () => {
-    // first, send a signal to Figma to get the image data. (main thread -> Figma)
+    // 2-1. first, send a signal to Figma to get the image data. (main thread -> Figma)
     emit<GetPreviewHandler>("GET_PREVIEW");
   };
 
@@ -116,26 +118,28 @@ function Plugin() {
           height: imageDetails.height,
         },
         processing: {
-          greyscaleMethod: "Disabled", // "Luminance", "RGB Average", "Disabled"
-          ditherMethod: "Atkinson Dithering", // "Atkinson Dithering", "Threshold"
+          option: filterOption,
         },
       };
 
-      // send image data to the bg thread to do heavy image processing
+      // 2-3. Send image data to the bg thread to do heavy image processing
       // (main thread -> bg thread)
       imageProcessingWebWorker.postMessage(preset);
 
-      // process finished, receive the image from background thread
+      // 2-4. process finished, receive the image from background thread
       // (bg thread -> main thread)
       imageProcessingWebWorker.onmessage = async (e: any) => {
-        const { processedPreviewImageBytes } = e.data;
+        const { processedPreviewImageBytes, timeTaken } = e.data;
         const newBytes = await encode(
           canvas,
           ctx!,
           processedPreviewImageBytes.image.data
         );
+        console.log(
+          `Image processed (${parseFloat(`${timeTaken}`).toFixed(2)} ms)`
+        );
 
-        // got processed result and send to figma worker to render on Figma canvas.
+        // 2-5. got processed result and send to figma worker to render on Figma canvas.
         // (main thread -> Figma worker)
         emit<PaintImageHandler>("PAINT_IMAGE", { imageBytes: newBytes });
       };
@@ -143,27 +147,31 @@ function Plugin() {
         console.log("image processing web worker error: ", err);
       };
     },
-    [imageProcessingWebWorker]
+    [imageProcessingWebWorker, filterOption]
   );
 
   useEffect(() => {
     onmessage = (event) => {
-      //get the image data. (Figma -> main thread)
+      // 2-2. get the image data. (Figma -> main thread)
       const { type } = event.data.pluginMessage;
       if (type === "get-node-image-bytes") {
         const imageBytes = event.data.pluginMessage.imageBytes;
         imageProcessing(imageBytes);
       }
     };
-  }, [imageProcessingWebWorker]);
+  }, [imageProcessingWebWorker, filterOption]);
 
   return (
     <Container space="medium">
       {/*  */}
       <VerticalSpace space="large" />
-      <Text>Example 1: Fib number</Text>
+      <Text>🔢 Example 1: Fib number</Text>
       <VerticalSpace space="small" />
-      <Text><Muted>Get a Fibonacci number by entering the index (try 42 or 43)</Muted></Text>
+      <Text>
+        <Muted>
+          Get a Fibonacci number by entering the index (try 42 or 43)
+        </Muted>
+      </Text>
       <VerticalSpace space="large" />
       <TextboxNumeric
         onInput={(event) => setNumber(event.currentTarget.value)}
@@ -185,15 +193,38 @@ function Plugin() {
       <Divider />
       {/*  */}
       <VerticalSpace space="large" />
-      <Text>Example 2: Image processing</Text>
+      <Text>📸 Example 2: Image processing</Text>
       <VerticalSpace space="small" />
-      <Text><Muted>Apply a filter on top of the selected image</Muted></Text>
+      <Text>
+        <Muted>Apply a filter on top of the selected image</Muted>
+      </Text>
+      <VerticalSpace space="small" />
+      <Dropdown
+        onChange={(event) => {
+          setFilterOption(event.currentTarget.value);
+        }}
+        options={[
+          {
+            value: "Warm",
+          },
+          {
+            value: "Cool",
+          },
+          {
+            value: "Cozy",
+          },
+          {
+            value: "B&W",
+          },
+        ]}
+        value={filterOption}
+        variant="border"
+      />
       <VerticalSpace space="large" />
       <Button fullWidth onClick={handleImageProcessing}>
         Image processing
       </Button>
       <VerticalSpace space="small" />
-      <Divider />
       {/*  */}
     </Container>
   );

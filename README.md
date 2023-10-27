@@ -1,12 +1,10 @@
-# React Editor
+# Web Worker - Figma plugin examples
 
-## Development guide
-
-*This plugin is built with [Create Figma Plugin](https://yuanqing.github.io/create-figma-plugin/).*
+Learning resources & notes about how to run scripts in background threads by using web worker.
 
 ### TODO
 - ✅ FibNum
-- 🚧 Image dither
+- ✅ Image filter & dither
 - 🚧 LLM 
 
 ### Pre-requisites

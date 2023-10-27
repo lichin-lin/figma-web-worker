@@ -4,11 +4,6 @@ export default interface ImageFillData {
   node: SceneNode;
 }
 
-export default interface JobResult {
-  imageBytes: Uint8Array;
-  fillData: ImageFillData;
-}
-
 /**
  * Filters nodes that have Image fills.
  * @param  {readonlySceneNode[]} nodes
@@ -53,44 +48,6 @@ export function BytesToImagePaintHashImage(
   const newPaint = JSON.parse(JSON.stringify(paint));
   newPaint.imageHash = figma.createImage(bytes).hash;
   return newPaint;
-}
-
-/**
- * Applies the processed dither effect to appropriate nodes
- * @param  {JobResult[]} results
- * @param  {ImageFillData[]} nodeFills
- * @param  {keep} keepImageFills Keeps the original image fill instead of replacing it..
- * @param  {any} resolve
- */
-export function applyProcessResults(
-  results: JobResult[],
-  nodeFills: ImageFillData[],
-  keepImageFills: boolean = false,
-  resolve: any
-) {
-  results.forEach((result, index) => {
-    let processDitherEffect = BytesToImagePaintHashImage(
-      result.imageBytes,
-      result.fillData.imageFill
-    );
-    // clone the node fills
-    const copyNodeFills = [
-      ...((nodeFills[index].node as GeometryMixin).fills as Array<ImagePaint>),
-    ];
-
-    if (!keepImageFills) {
-      // replace the image filter
-      copyNodeFills.splice(result.fillData.index, 1, processDitherEffect);
-    } else {
-      // the new image filter to the top..
-      copyNodeFills.push(processDitherEffect);
-    }
-
-    (nodeFills[index].node as GeometryMixin).fills = copyNodeFills;
-  });
-
-  // resolve thre promise after applying dithering effect.
-  resolve();
 }
 
 /**

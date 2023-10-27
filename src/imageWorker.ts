@@ -1,9 +1,8 @@
-// WEB WORKER - Heavy loading calculation task
+// WEB WORKER - Heavy loading image data calculation task
 // @ts-nocheck
 export default () => {
-  self.onmessage = (message) => {
-    // Convert image data to greyscale based on luminance.
-    function greyscale_luminance(image) {
+  self.onmessage = async (message) => {
+    function applyGrayFilter(image) {
       for (var i = 0; i <= image.data.length; i += 4) {
         image.data[i] =
           image.data[i + 1] =
@@ -18,7 +17,6 @@ export default () => {
       return image;
     }
 
-    // Convert image data to greyscale based on average of R, G and B values.
     function greyscale_average(image) {
       for (var i = 0; i <= image.data.length; i += 4) {
         image.data[i] =
@@ -32,7 +30,6 @@ export default () => {
       return image;
     }
 
-    // Apply Atkinson Dither to Image Data
     function dither_atkinson(image, imageWidth, drawColour) {
       skipPixels = 4;
 
@@ -98,8 +95,8 @@ export default () => {
         const blue = imageData.data[i + 2];
 
         // Increase red and green channels to create a warm effect
-        imageData.data[i] = Math.min(255, red + 50);
-        imageData.data[i + 1] = Math.min(255, green + 20);
+        imageData.data[i] = Math.min(255, red + 30);
+        imageData.data[i + 1] = Math.min(255, green + 10);
         // Blue channel remains unchanged to preserve cool colors
 
         // Adjust the overall brightness
@@ -125,8 +122,8 @@ export default () => {
         const blue = imageData.data[i + 2];
 
         // Decrease red and green channels to create a cool effect
-        imageData.data[i] = Math.max(0, red - 20);
-        imageData.data[i + 1] = Math.max(0, green - 20);
+        imageData.data[i] = Math.max(0, red - 10);
+        imageData.data[i + 1] = Math.max(0, green - 10);
         // Blue channel remains unchanged to preserve cool colors
 
         // Adjust the overall brightness
@@ -146,30 +143,10 @@ export default () => {
       }
     }
 
-    function filmGrainFilter(imageData, intensity) {
-      const noiseAmount = 20 * intensity; // Adjust the noise amount based on the intensity
-
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        const randomValue = Math.random() * noiseAmount - noiseAmount / 2;
-
-        // Add random noise to the color channels
-        imageData.data[i] = Math.min(255, imageData.data[i] + randomValue);
-        imageData.data[i + 1] = Math.min(
-          255,
-          imageData.data[i + 1] + randomValue
-        );
-        imageData.data[i + 2] = Math.min(
-          255,
-          imageData.data[i + 2] + randomValue
-        );
-      }
-
-      return imageData;
-    }
-    function cozyFadedFilter(imageData) {
-      const brightness = 0.8; // Adjust the overall brightness
-      const saturation = 0.6; // Adjust the saturation
-      const contrast = 0.92; // Adjust the contrast
+    function applyCozyFilter(imageData) {
+      const brightness = 1; // Adjust the overall brightness
+      const saturation = 0.8; // Adjust the saturation
+      const contrast = 0.8; // Adjust the contrast
 
       for (let i = 0; i < imageData.data.length; i += 4) {
         // Apply brightness adjustment
@@ -196,105 +173,52 @@ export default () => {
 
       return imageData;
     }
-    function blackAndWhiteFilter(imageData) {
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        const red = imageData.data[i];
-        const green = imageData.data[i + 1];
-        const blue = imageData.data[i + 2];
 
-        // Calculate the average value of the RGB channels
-        const averageValue = (red + green + blue) / 3;
+    function fuzzFilter(imageData, width, height, amount) {
+      const data = imageData.data;
+      const fuzzyPixels = 2; // pixels
+      const modC = 4 * fuzzyPixels; // channels * pixels
+      const modW = 4 * width * 1;
 
-        // Set the color channels to the average value to create a grayscale effect
-        imageData.data[i] = averageValue;
-        imageData.data[i + 1] = averageValue;
-        imageData.data[i + 2] = averageValue;
-      }
-    }
-    function grayFilter(imageData) {
-      const threshold = 128; // Adjust the threshold value
-
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        const red = imageData.data[i];
-        const green = imageData.data[i + 1];
-        const blue = imageData.data[i + 2];
-
-        // Calculate the average value of the RGB channels
-        const averageValue = (red + green + blue) / 3;
-
-        // Adjust the intensity of black pixels (below the threshold) to appear as gray
-        if (averageValue < threshold) {
-          const grayValue = Math.round((averageValue / threshold) * 128); // Adjust the gray value
-          imageData.data[i] = grayValue;
-          imageData.data[i + 1] = grayValue;
-          imageData.data[i + 2] = grayValue;
-        } else {
-          // Set white pixels (above or equal to the threshold) to pure white
-          imageData.data[i] = 255;
-          imageData.data[i + 1] = 255;
-          imageData.data[i + 2] = 255;
+      for (let i = 0; i < data.length; i += 4) {
+        const f = modC + modW;
+        const grainAmount = Math.random() * 2 * amount - amount;
+        // fuzzify
+        if (data[i + f]) {
+          data[i] = Math.round((data[i] + data[i + f]) / 2);
+          data[i + 1] = Math.round((data[i + 1] + data[i + f + 1]) / 2);
+          data[i + 2] = Math.round((data[i + 2] + data[i + f + 2]) / 2);
         }
+        // granulate
+        data[i] += grainAmount; // Red channel
+        data[i + 1] += grainAmount; // Green channel
+        data[i + 2] += grainAmount; // Blue channel
       }
     }
-    function glitchFilter(imageData) {
-      const glitchIntensity = 0.1; // Adjust the intensity of the glitch effect
 
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        // Add random noise to color channels
-        imageData.data[i] =
-          imageData.data[i] + Math.random() * glitchIntensity * 255;
-        imageData.data[i + 1] =
-          imageData.data[i + 1] + Math.random() * glitchIntensity * 255;
-        imageData.data[i + 2] =
-          imageData.data[i + 2] + Math.random() * glitchIntensity * 255;
-
-        // Randomly offset pixel positions
-        const offsetX = Math.floor(Math.random() * glitchIntensity * 10);
-        const offsetY = Math.floor(Math.random() * glitchIntensity * 10);
-        const newIndex =
-          (((i / 4 + offsetX) % imageData.width) + imageData.width * offsetY) *
-          4;
-
-        // Swap color channels with nearby pixels
-        imageData.data[i] = imageData.data[newIndex];
-        imageData.data[i + 1] = imageData.data[newIndex + 1];
-        imageData.data[i + 2] = imageData.data[newIndex + 2];
-      }
-    }
     // DITHER
-    function dither(data) {
-      if (data.processing.greyscaleMethod == "Luminance") {
-        greyscale_luminance(data.image.data);
-      } else if (data.processing.greyscaleMethod == "RGB Average") {
-        greyscale_average(data.image.data);
+    async function dither(data) {
+      switch (data.processing.option) {
+        case "Warm":
+          applyWarmFilter(data.image.data);
+          break;
+        case "Cool":
+          applyCoolFilter(data.image.data);
+          break;
+        case "Cozy":
+          applyCozyFilter(data.image.data);
+          break;
+        case "B&W":
+          applyGrayFilter(data.image.data);
+          break;
       }
-
-      // texture
-      if (data.processing.ditherMethod == "Atkinson Dithering") {
-        dither_atkinson(
-          data.image.data,
-          data.image.width,
-          data.processing.greyscaleMethod == "Disabled"
-        );
-      } else if (data.processing.ditherMethod == "Threshold") {
-        dither_threshold(data.image.data, data.processing.ditherThreshold);
-      }
-
-      // theme
-      // applyWarmFilter(data.image.data);
-      // applyCoolFilter(data.image.data);
-      cozyFadedFilter(data.image.data);
-
-      // black and white
-      // blackAndWhiteFilter(data.image.data);
-      // grayFilter(data.image.data);
-
+      fuzzFilter(data.image.data, data.image.width, data.image.height, 30);
       return data;
     }
 
     // main function
     const start = performance.now();
-    const processedPreviewImageBytes = dither(message.data);
+    const processedPreviewImageBytes = await dither(message.data);
     const timeTaken = performance.now() - start;
     postMessage({
       processedPreviewImageBytes,
@@ -302,3 +226,19 @@ export default () => {
     });
   };
 };
+
+// backup code:
+// if (data.processing.greyscaleMethod == "Luminance") {
+//   greyscale_luminance(data.image.data);
+// } else if (data.processing.greyscaleMethod == "RGB Average") {
+//   greyscale_average(data.image.data);
+// }
+// if (data.processing.ditherMethod == "Atkinson Dithering") {
+//   dither_atkinson(
+//     data.image.data,
+//     data.image.width,
+//     data.processing.greyscaleMethod == "Disabled"
+//   );
+// } else if (data.processing.ditherMethod == "Threshold") {
+//   dither_threshold(data.image.data, data.processing.ditherThreshold);
+// }
